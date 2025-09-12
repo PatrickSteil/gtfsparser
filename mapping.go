@@ -963,7 +963,7 @@ func createRoute(r []string, flds RouteFields, feed *Feed, prefix string) (route
 	a.Continuous_drop_off = int8(getRangeIntWithDefault(flds.continuousDropOff, r, flds.FldName(flds.continuousDropOff), 0, 3, 1, feed.opts.UseDefValueOnError, feed))
 
 	if !hasValidContrast(a.Text_color, a.Color) {
-		return nil, errors.New("Invalid color contrast between text_color and color!")
+		feed.warn(fmt.Errorf("Invalid color for route %s contrast between text_color #%s and route_color #%s!", a.Id, a.Text_color, a.Color))
 	}
 
 	return a, nil
