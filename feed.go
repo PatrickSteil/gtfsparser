@@ -10,14 +10,15 @@ import (
 	// "archive/zip"
 	"errors"
 	"fmt"
-	"github.com/klauspost/compress/zip"
-	"github.com/patrickbr/gtfsparser/gtfs"
 	"io"
 	"math"
 	"os"
 	opath "path"
 	"sort"
 	"unicode"
+
+	"github.com/klauspost/compress/zip"
+	"github.com/patrickbr/gtfsparser/gtfs"
 )
 
 // Holds the original column ordering
@@ -1228,6 +1229,18 @@ func (feed *Feed) parseStopTimes(path string, prefix string, geofiltered map[str
 			feed.NumStopTimes += len(trip.StopTimes)
 			if e != nil {
 				break
+			}
+
+			// show warning if first stop_time of trip does not allow entrance or if the last does not allow exit
+			if len(trip.StopTimes) == 0 {
+				// will be dealt with later
+				continue
+			}
+			if trip.StopTimes[0].Pickup_type() == 1 {
+				feed.warn(fmt.Errorf("Entrance in first stop_time not allowed! Trip ID %s", trip.Id))
+			}
+			if trip.StopTimes[len(trip.StopTimes)-1].Drop_off_type() == 1 {
+				feed.warn(fmt.Errorf("Exit in last stop_time not allowed! Trip ID %s", trip.Id))
 			}
 		}
 	}
