@@ -942,6 +942,28 @@ func (feed *Feed) parseTrips(path string, prefix string, filteredRoutes map[stri
 		}
 	}
 
+	if feed.opts.ShowWarnings {
+		// for all trips connected by the same block_id, warn if the underlying route_type is different
+		blockIdRouteType := make(map[string]int16)
+		for _, trip := range feed.Trips {
+			if trip.Block_id != nil {
+				bid := *trip.Block_id
+				rt := trip.Route.Type
+
+				if prevRt, ok := blockIdRouteType[bid]; ok {
+					if prevRt != rt {
+						feed.warn(fmt.Errorf(
+							"Inconsistent route types for block_id '%s': found %d and %d",
+							bid, prevRt, rt,
+						))
+					}
+				} else {
+					blockIdRouteType[bid] = rt
+				}
+			}
+		}
+	}
+
 	feed.ColOrders.Trips = append([]string(nil), reader.header...)
 
 	return e
