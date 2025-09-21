@@ -10,14 +10,15 @@ import (
 	// "archive/zip"
 	"errors"
 	"fmt"
-	"github.com/klauspost/compress/zip"
-	"github.com/patrickbr/gtfsparser/gtfs"
 	"io"
 	"math"
 	"os"
 	opath "path"
 	"sort"
 	"unicode"
+
+	"github.com/klauspost/compress/zip"
+	"github.com/patrickbr/gtfsparser/gtfs"
 )
 
 // Holds the original column ordering
@@ -96,6 +97,7 @@ type ParseOptions struct {
 	ZipFix                       bool
 	ShowWarnings                 bool
 	DropShapes                   bool
+	DropLevelsPathwaysFares      bool
 	KeepAddFlds                  bool
 	DateFilterStart              gtfs.Date
 	DateFilterEnd                gtfs.Date
@@ -214,7 +216,28 @@ func NewFeed() *Feed {
 		NumShpPoints:          0,
 		NumStopTimes:          0,
 		fastParsePossible:     true,
-		opts:                  ParseOptions{false, false, false, false, "", false, false, false, false, gtfs.Date{}, gtfs.Date{}, make([]Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false, false, false, false},
+		opts: ParseOptions{
+			false,                   // UseDefValueOnError
+			false,                   // DropErroneous
+			false,                   // DryRun
+			false,                   // CheckNullCoordinates
+			"",                      // EmptyStringRepl
+			false,                   // ZipFix
+			false,                   // ShowWarnings
+			false,                   // DropShapes
+			false,                   // DropLevelsPathwaysFares
+			false,                   // KeepAddFlds
+			gtfs.Date{},             // DateFilterStart
+			gtfs.Date{},             // DateFilterEnd
+			make([]Polygon, 0),      // PolygonFilter
+			false,                   // UseStandardRouteTypes
+			make(map[int16]bool, 0), // MOTFilter
+			make(map[int16]bool, 0), // MOTFilterNeg
+			false,                   // AssumeCleanCsv
+			false,                   // RemoveFiller
+			false,                   // UseGoogleSupportedRouteTypes
+			false,                   // DropSingleStopTrips
+		},
 	}
 	g.lastString = &g.emptyString
 
@@ -524,6 +547,7 @@ func (feed *Feed) parseStops(path string, prefix string, geofiltered map[string]
 	parentStopIds := make(map[string]string, 0)
 	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
 		stop, parentId, e := createStop(record, flds, feed, prefix)
+
 		if e == nil {
 			if _, ok := feed.Stops[stop.Id]; ok {
 				e = errors.New("ID collision, stop_id '" + stop.Id + "' already used.")
@@ -1304,6 +1328,9 @@ func (feed *Feed) parseFrequencies(path string, prefix string, filteredTrips map
 }
 
 func (feed *Feed) parseFareAttributes(path string, prefix string) (err error) {
+	if feed.opts.DropLevelsPathwaysFares {
+		return
+	}
 	file, e := feed.getFile(path, "fare_attributes.txt")
 
 	if e != nil {
@@ -1364,6 +1391,9 @@ func (feed *Feed) parseFareAttributes(path string, prefix string) (err error) {
 }
 
 func (feed *Feed) parseFareAttributeRules(path string, prefix string, filteredRoutes map[string]struct{}) (err error) {
+	if feed.opts.DropLevelsPathwaysFares {
+		return
+	}
 	file, e := feed.getFile(path, "fare_rules.txt")
 
 	if e != nil {
@@ -1510,6 +1540,9 @@ func (feed *Feed) parseTransfers(path string, prefix string, geofiltered map[str
 }
 
 func (feed *Feed) parsePathways(path string, prefix string, geofiltered map[string]struct{}) (err error) {
+	if feed.opts.DropLevelsPathwaysFares {
+		return
+	}
 	file, e := feed.getFile(path, "pathways.txt")
 
 	if e != nil {
@@ -1755,6 +1788,9 @@ func (feed *Feed) parseAttributions(path string, prefix string, filteredRoutes m
 }
 
 func (feed *Feed) parseLevels(path string, idprefix string) (err error) {
+	if feed.opts.DropLevelsPathwaysFares {
+		return
+	}
 	file, e := feed.getFile(path, "levels.txt")
 
 	if e != nil {

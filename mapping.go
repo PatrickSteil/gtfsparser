@@ -10,13 +10,14 @@ import (
 	hex "encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/patrickbr/gtfsparser/gtfs"
-	"github.com/valyala/fastjson/fastfloat"
 	"math"
 	mail "net/mail"
 	url "net/url"
 	"regexp"
 	"strings"
+
+	"github.com/patrickbr/gtfsparser/gtfs"
+	"github.com/valyala/fastjson/fastfloat"
 )
 
 var emptyTz, _ = gtfs.NewTimezone("")
@@ -723,12 +724,18 @@ func createTranslation(r []string, flds TranslationFields, feed *Feed, prefix st
 		} else if tableName == "feed_info" {
 			panic(fmt.Errorf("Cannot use record_id for table_name 'feed_info'"))
 		} else if tableName == "pathways" {
+			if feed.opts.DropLevelsPathwaysFares {
+				return
+			}
 			if pw, ok := feed.Pathways[prefix+id]; ok {
 				pw.Translations = append(pw.Translations, tr)
 			} else {
 				panic(fmt.Errorf("No pathway with id %s found", id))
 			}
 		} else if tableName == "levels" {
+			if feed.opts.DropLevelsPathwaysFares {
+				return
+			}
 			if lvl, ok := feed.Levels[prefix+id]; ok {
 				lvl.Translations = append(lvl.Translations, tr)
 			} else {
@@ -1025,7 +1032,7 @@ func createServiceFromCalendarDates(r []string, flds CalendarDatesFields, feed *
 			return nil, errors.New("Date exception for service id " + getString(flds.serviceId, r, flds.FldName(flds.serviceId), true, true, "") + " defined 2 times for one date.")
 		}
 		if (filterDateEnd.IsEmpty() || !date.GetTime().After(filterDateEnd.GetTime())) &&
-		(filterDateStart.IsEmpty() || !date.GetTime().Before(filterDateStart.GetTime())) {
+			(filterDateStart.IsEmpty() || !date.GetTime().Before(filterDateStart.GetTime())) {
 			service.SetExceptionTypeOn(date, int8(t))
 		}
 	}
@@ -1109,9 +1116,13 @@ func createStop(r []string, flds StopFields, feed *Feed, prefix string) (s *gtfs
 		panic(fmt.Errorf("Expected coordinate (lat, lon), instead found (0, 0), which is in the middle of the atlantic."))
 	}
 
-	a.Zone_id = prefix + getString(flds.zoneId, r, flds.FldName(flds.zoneId), false, false, "")
-	if len(a.Zone_id) == len(prefix) {
+	if feed.opts.DropLevelsPathwaysFares {
 		a.Zone_id = ""
+	} else {
+		a.Zone_id = prefix + getString(flds.zoneId, r, flds.FldName(flds.zoneId), false, false, "")
+		if len(a.Zone_id) == len(prefix) {
+			a.Zone_id = ""
+		}
 	}
 	a.Url = getURL(flds.stopUrl, r, flds, false, feed.opts.UseDefValueOnError, feed)
 
@@ -1132,13 +1143,15 @@ func createStop(r []string, flds StopFields, feed *Feed, prefix string) (s *gtfs
 	a.Wheelchair_boarding = int8(getRangeIntWithDefault(flds.wheelchairBoarding, r, flds.FldName(flds.wheelchairBoarding), 0, 2, 0, feed.opts.UseDefValueOnError, feed))
 	a.Level = nil
 
-	levelId := prefix + getString(flds.levelId, r, flds.FldName(flds.levelId), false, false, "")
+	if !feed.opts.DropLevelsPathwaysFares {
+		levelId := prefix + getString(flds.levelId, r, flds.FldName(flds.levelId), false, false, "")
 
-	if len(levelId) > len(prefix) {
-		if val, ok := feed.Levels[levelId]; ok {
-			a.Level = val
-		} else {
-			panic(errors.New("No level with id " + getString(flds.levelId, r, flds.FldName(flds.levelId), false, true, "") + " found."))
+		if len(levelId) > len(prefix) {
+			if val, ok := feed.Levels[levelId]; ok {
+				a.Level = val
+			} else {
+				panic(errors.New("No level with id " + getString(flds.levelId, r, flds.FldName(flds.levelId), false, true, "") + " found."))
+			}
 		}
 	}
 
@@ -1719,7 +1732,7 @@ func createLevel(r []string, flds LevelFields, feed *Feed, idprefix string) (t *
 
 func getString(id int, r []string, fldName string, req bool, nonempty bool, emptyrepl string) string {
 	if id >= 0 {
-		if id < len(r) && len(r[id]) > 0{
+		if id < len(r) && len(r[id]) > 0 {
 			return r[id]
 		}
 		if nonempty {
@@ -2040,7 +2053,7 @@ func getTime(id int, r []string, fldName string) gtfs.Time {
 
 	return gtfs.Time{Hour: int8(hour), Minute: int8(minute), Second: int8(second)}
 
-	fail:
+fail:
 	panic(fmt.Errorf("Expected HH:MM:SS time for field '%s', found '%s' (%s)", fldName, errFldPrep(r[id]), e.Error()))
 }
 
