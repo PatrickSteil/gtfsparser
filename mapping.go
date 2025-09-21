@@ -10,13 +10,14 @@ import (
 	hex "encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/patrickbr/gtfsparser/gtfs"
-	"github.com/valyala/fastjson/fastfloat"
 	"math"
 	mail "net/mail"
 	url "net/url"
 	"regexp"
 	"strings"
+
+	"github.com/patrickbr/gtfsparser/gtfs"
+	"github.com/valyala/fastjson/fastfloat"
 )
 
 var emptyTz, _ = gtfs.NewTimezone("")
@@ -1025,7 +1026,7 @@ func createServiceFromCalendarDates(r []string, flds CalendarDatesFields, feed *
 			return nil, errors.New("Date exception for service id " + getString(flds.serviceId, r, flds.FldName(flds.serviceId), true, true, "") + " defined 2 times for one date.")
 		}
 		if (filterDateEnd.IsEmpty() || !date.GetTime().After(filterDateEnd.GetTime())) &&
-		(filterDateStart.IsEmpty() || !date.GetTime().Before(filterDateStart.GetTime())) {
+			(filterDateStart.IsEmpty() || !date.GetTime().Before(filterDateStart.GetTime())) {
 			service.SetExceptionTypeOn(date, int8(t))
 		}
 	}
@@ -1563,6 +1564,16 @@ func createFareRule(r []string, flds FareRuleFields, feed *Feed, prefix string) 
 	rule.Destination_id = prefix + getString(flds.destinationId, r, flds.FldName(flds.destinationId), false, false, "")
 	rule.Contains_id = prefix + getString(flds.containsId, r, flds.FldName(flds.containsId), false, false, "")
 
+	if _, ok := feed.ZoneIds[rule.Origin_id]; !ok {
+		feed.warn(fmt.Errorf("No zone_id '%s' (origin_id) defined in stops.txt", rule.Origin_id))
+	}
+	if _, ok := feed.ZoneIds[rule.Destination_id]; !ok {
+		feed.warn(fmt.Errorf("No zone_id '%s' (destination_id) defined in stops.txt", rule.Destination_id))
+	}
+	if _, ok := feed.ZoneIds[rule.Contains_id]; !ok {
+		feed.warn(fmt.Errorf("No zone_id '%s' (contains_id) defined in stops.txt", rule.Contains_id))
+	}
+
 	fareattr.Rules = append(fareattr.Rules, rule)
 
 	return fareattr, rule, nil
@@ -1719,7 +1730,7 @@ func createLevel(r []string, flds LevelFields, feed *Feed, idprefix string) (t *
 
 func getString(id int, r []string, fldName string, req bool, nonempty bool, emptyrepl string) string {
 	if id >= 0 {
-		if id < len(r) && len(r[id]) > 0{
+		if id < len(r) && len(r[id]) > 0 {
 			return r[id]
 		}
 		if nonempty {
@@ -2040,7 +2051,7 @@ func getTime(id int, r []string, fldName string) gtfs.Time {
 
 	return gtfs.Time{Hour: int8(hour), Minute: int8(minute), Second: int8(second)}
 
-	fail:
+fail:
 	panic(fmt.Errorf("Expected HH:MM:SS time for field '%s', found '%s' (%s)", fldName, errFldPrep(r[id]), e.Error()))
 }
 
