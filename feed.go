@@ -10,14 +10,15 @@ import (
 	// "archive/zip"
 	"errors"
 	"fmt"
-	"github.com/klauspost/compress/zip"
-	"github.com/patrickbr/gtfsparser/gtfs"
 	"io"
 	"math"
 	"os"
 	opath "path"
 	"sort"
 	"unicode"
+
+	"github.com/klauspost/compress/zip"
+	"github.com/patrickbr/gtfsparser/gtfs"
 )
 
 // Holds the original column ordering
@@ -142,6 +143,7 @@ type Feed struct {
 	Pathways       map[string]*gtfs.Pathway
 	Transfers      map[gtfs.TransferKey]gtfs.TransferVal
 	FeedInfos      []*gtfs.FeedInfo
+	ZoneIds        map[string]bool
 
 	StopsAddFlds          map[string]map[string]string
 	AgenciesAddFlds       map[string]map[string]string
@@ -196,6 +198,7 @@ func NewFeed() *Feed {
 		Pathways:              make(map[string]*gtfs.Pathway),
 		Transfers:             make(map[gtfs.TransferKey]gtfs.TransferVal, 0),
 		FeedInfos:             make([]*gtfs.FeedInfo, 0),
+		ZoneIds:               make(map[string]bool, 0),
 		StopsAddFlds:          make(map[string]map[string]string),
 		StopTimesAddFlds:      make(map[string]map[string]map[int]string),
 		FrequenciesAddFlds:    make(map[string]map[string]map[*gtfs.Frequency]string),
@@ -568,6 +571,11 @@ func (feed *Feed) parseStops(path string, prefix string, geofiltered map[string]
 
 				feed.StopsAddFlds[reader.header[i]][stop.Id] = record[i]
 			}
+		}
+
+		// add zoneId if nonempty
+		if stop.Zone_id != "" {
+			feed.ZoneIds[stop.Zone_id] = true
 		}
 	}
 
