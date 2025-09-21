@@ -10,13 +10,14 @@ import (
 	hex "encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/patrickbr/gtfsparser/gtfs"
-	"github.com/valyala/fastjson/fastfloat"
 	"math"
 	mail "net/mail"
 	url "net/url"
 	"regexp"
 	"strings"
+
+	"github.com/patrickbr/gtfsparser/gtfs"
+	"github.com/valyala/fastjson/fastfloat"
 )
 
 var emptyTz, _ = gtfs.NewTimezone("")
@@ -1025,7 +1026,7 @@ func createServiceFromCalendarDates(r []string, flds CalendarDatesFields, feed *
 			return nil, errors.New("Date exception for service id " + getString(flds.serviceId, r, flds.FldName(flds.serviceId), true, true, "") + " defined 2 times for one date.")
 		}
 		if (filterDateEnd.IsEmpty() || !date.GetTime().After(filterDateEnd.GetTime())) &&
-		(filterDateStart.IsEmpty() || !date.GetTime().Before(filterDateStart.GetTime())) {
+			(filterDateStart.IsEmpty() || !date.GetTime().Before(filterDateStart.GetTime())) {
 			service.SetExceptionTypeOn(date, int8(t))
 		}
 	}
@@ -1256,8 +1257,12 @@ func createStopTime(r []string, flds *StopTimeFields, feed *Feed, prefix string)
 	a.SetDrop_off_type(uint8(getRangeInt(flds.dropOffType, r, flds.FldName(flds.dropOffType), false, 0, 3)))
 	a.SetContinuous_pickup(uint8(getRangeIntWithDefault(flds.continuousPickup, r, flds.FldName(flds.continuousPickup), 0, 3, 1, feed.opts.UseDefValueOnError, feed)))
 	a.SetContinuous_drop_off(uint8(getRangeIntWithDefault(flds.continuousDropOff, r, flds.FldName(flds.continuousDropOff), 0, 3, 1, feed.opts.UseDefValueOnError, feed)))
-	dist := getNullableFloat(flds.shapeDistTraveled, r, flds.FldName(flds.shapeDistTraveled), feed.opts.UseDefValueOnError, feed)
-	a.SetShape_dist_traveled(dist)
+
+	if !feed.opts.DropShapes {
+		dist := getNullableFloat(flds.shapeDistTraveled, r, flds.FldName(flds.shapeDistTraveled), feed.opts.UseDefValueOnError, feed)
+		a.SetShape_dist_traveled(dist)
+	}
+
 	a.SetTimepoint(getBool(flds.timepoint, r, flds.FldName(flds.timepoint), false, !a.Arrival_time().Empty() && !a.Departure_time().Empty(), feed.opts.UseDefValueOnError, feed))
 
 	if (a.Arrival_time().Empty() || a.Departure_time().Empty()) && a.Timepoint() {
@@ -1719,7 +1724,7 @@ func createLevel(r []string, flds LevelFields, feed *Feed, idprefix string) (t *
 
 func getString(id int, r []string, fldName string, req bool, nonempty bool, emptyrepl string) string {
 	if id >= 0 {
-		if id < len(r) && len(r[id]) > 0{
+		if id < len(r) && len(r[id]) > 0 {
 			return r[id]
 		}
 		if nonempty {
@@ -1740,9 +1745,26 @@ func trimQuotes(s string) string {
 }
 
 func removeFillers(s string) string {
-	if s == "." || s == "-" || s == ".." || s == "..." || s == "?" {
+	if strings.TrimSpace(s) == "" {
 		return ""
 	}
+
+	// Check if all runes are the same
+	if len(s) > 0 {
+		first := []rune(s)[0]
+		allSame := true
+		for _, r := range s {
+			if r != first {
+				allSame = false
+				break
+			}
+		}
+		if allSame {
+			// Example: "??", "----", "..."
+			return ""
+		}
+	}
+
 	return s
 }
 
@@ -2040,7 +2062,7 @@ func getTime(id int, r []string, fldName string) gtfs.Time {
 
 	return gtfs.Time{Hour: int8(hour), Minute: int8(minute), Second: int8(second)}
 
-	fail:
+fail:
 	panic(fmt.Errorf("Expected HH:MM:SS time for field '%s', found '%s' (%s)", fldName, errFldPrep(r[id]), e.Error()))
 }
 
