@@ -28,6 +28,7 @@ type Stop struct {
 	Level               *Level
 	Platform_code       string
 	Timezone            Timezone
+	NoticeAssignments   []*NoticeAssignment
 }
 
 // HasLatLon returns true if this Stop has a latitude and longitude

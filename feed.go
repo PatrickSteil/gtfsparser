@@ -40,6 +40,9 @@ type ColOrders struct {
 	Transfers          []string
 	FeedInfos          []string
 	Attributions       []string
+	Notices            []string
+	NoticeAssignments  []string
+	TripSegments       []string
 }
 
 type Polygon struct {
@@ -130,6 +133,12 @@ type ErrStats struct {
 	DroppedFeedInfos          int
 	DroppedTranslations       int
 	NumTranslations           int
+	DroppedNotices            int
+	NumNotices                int
+	DroppedNoticeAssignments  int
+	NumNoticeAssignments      int
+	DroppedTripSegments       int
+	NumTripSegments           int
 }
 
 // Feed represents a single GTFS feed
@@ -143,25 +152,30 @@ type Feed struct {
 	Shapes         map[string]*gtfs.Shape
 	Levels         map[string]*gtfs.Level
 	Pathways       map[string]*gtfs.Pathway
+	Notices        map[string]*gtfs.Notice
+	TripSegments   map[string]*gtfs.TripSegment
 	Transfers      map[gtfs.TransferKey]gtfs.TransferVal
 	FeedInfos      []*gtfs.FeedInfo
 	ZoneIds        map[string]bool
 
-	StopsAddFlds          map[string]map[string]string
-	AgenciesAddFlds       map[string]map[string]string
-	RoutesAddFlds         map[string]map[string]string
-	TripsAddFlds          map[string]map[string]string
-	StopTimesAddFlds      map[string]map[string]map[int]string
-	FrequenciesAddFlds    map[string]map[string]map[*gtfs.Frequency]string
-	ShapesAddFlds         map[string]map[string]map[int]string
-	FareRulesAddFlds      map[string]map[string]map[*gtfs.FareAttributeRule]string
-	LevelsAddFlds         map[string]map[string]string
-	PathwaysAddFlds       map[string]map[string]string
-	FareAttributesAddFlds map[string]map[string]string
-	TransfersAddFlds      map[string]map[gtfs.TransferKey]string
-	FeedInfosAddFlds      map[string]map[*gtfs.FeedInfo]string
-	AttributionsAddFlds   map[string]map[*gtfs.Attribution]string
-	TranslationsAddFlds   map[string]map[*gtfs.Translation]string
+	StopsAddFlds             map[string]map[string]string
+	AgenciesAddFlds          map[string]map[string]string
+	RoutesAddFlds            map[string]map[string]string
+	TripsAddFlds             map[string]map[string]string
+	StopTimesAddFlds         map[string]map[string]map[int]string
+	FrequenciesAddFlds       map[string]map[string]map[*gtfs.Frequency]string
+	ShapesAddFlds            map[string]map[string]map[int]string
+	FareRulesAddFlds         map[string]map[string]map[*gtfs.FareAttributeRule]string
+	LevelsAddFlds            map[string]map[string]string
+	PathwaysAddFlds          map[string]map[string]string
+	FareAttributesAddFlds    map[string]map[string]string
+	TransfersAddFlds         map[string]map[gtfs.TransferKey]string
+	FeedInfosAddFlds         map[string]map[*gtfs.FeedInfo]string
+	AttributionsAddFlds      map[string]map[*gtfs.Attribution]string
+	TranslationsAddFlds      map[string]map[*gtfs.Translation]string
+	NoticesAddFlds           map[string]map[string]string
+	TripSegmentsAddFlds      map[string]map[string]string
+	NoticeAssignmentsAddFlds map[string]map[*gtfs.NoticeAssignment]string
 
 	// this only holds feed-wide attributions
 	Attributions []*gtfs.Attribution
@@ -190,38 +204,43 @@ type Feed struct {
 // NewFeed creates a new, empty feed
 func NewFeed() *Feed {
 	g := Feed{
-		Agencies:              make(map[string]*gtfs.Agency),
-		Stops:                 make(map[string]*gtfs.Stop),
-		Routes:                make(map[string]*gtfs.Route),
-		Trips:                 make(map[string]*gtfs.Trip),
-		Services:              make(map[string]*gtfs.Service),
-		FareAttributes:        make(map[string]*gtfs.FareAttribute),
-		Shapes:                make(map[string]*gtfs.Shape),
-		Levels:                make(map[string]*gtfs.Level),
-		Pathways:              make(map[string]*gtfs.Pathway),
-		Transfers:             make(map[gtfs.TransferKey]gtfs.TransferVal, 0),
-		FeedInfos:             make([]*gtfs.FeedInfo, 0),
-		ZoneIds:               make(map[string]bool, 0),
-		StopsAddFlds:          make(map[string]map[string]string),
-		StopTimesAddFlds:      make(map[string]map[string]map[int]string),
-		FrequenciesAddFlds:    make(map[string]map[string]map[*gtfs.Frequency]string),
-		ShapesAddFlds:         make(map[string]map[string]map[int]string),
-		AgenciesAddFlds:       make(map[string]map[string]string),
-		RoutesAddFlds:         make(map[string]map[string]string),
-		TripsAddFlds:          make(map[string]map[string]string),
-		LevelsAddFlds:         make(map[string]map[string]string),
-		PathwaysAddFlds:       make(map[string]map[string]string),
-		FareAttributesAddFlds: make(map[string]map[string]string),
-		FareRulesAddFlds:      make(map[string]map[string]map[*gtfs.FareAttributeRule]string),
-		TransfersAddFlds:      make(map[string]map[gtfs.TransferKey]string),
-		FeedInfosAddFlds:      make(map[string]map[*gtfs.FeedInfo]string),
-		AttributionsAddFlds:   make(map[string]map[*gtfs.Attribution]string),
-		ErrorStats:            ErrStats{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		warnCounts:            make(map[string]int),
-		NumShpPoints:          0,
-		NumStopTimes:          0,
-		fastParsePossible:     true,
-		opts:                  ParseOptions{false, false, false, false, "", false, false, false, false, false, gtfs.Date{}, gtfs.Date{}, make([]Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false, false, false, false},
+		Agencies:                 make(map[string]*gtfs.Agency),
+		Stops:                    make(map[string]*gtfs.Stop),
+		Routes:                   make(map[string]*gtfs.Route),
+		Trips:                    make(map[string]*gtfs.Trip),
+		Services:                 make(map[string]*gtfs.Service),
+		FareAttributes:           make(map[string]*gtfs.FareAttribute),
+		Shapes:                   make(map[string]*gtfs.Shape),
+		Levels:                   make(map[string]*gtfs.Level),
+		Pathways:                 make(map[string]*gtfs.Pathway),
+		Notices:                  make(map[string]*gtfs.Notice),
+		TripSegments:             make(map[string]*gtfs.TripSegment),
+		Transfers:                make(map[gtfs.TransferKey]gtfs.TransferVal, 0),
+		FeedInfos:                make([]*gtfs.FeedInfo, 0),
+		ZoneIds:                  make(map[string]bool, 0),
+		StopsAddFlds:             make(map[string]map[string]string),
+		StopTimesAddFlds:         make(map[string]map[string]map[int]string),
+		FrequenciesAddFlds:       make(map[string]map[string]map[*gtfs.Frequency]string),
+		ShapesAddFlds:            make(map[string]map[string]map[int]string),
+		AgenciesAddFlds:          make(map[string]map[string]string),
+		RoutesAddFlds:            make(map[string]map[string]string),
+		TripsAddFlds:             make(map[string]map[string]string),
+		LevelsAddFlds:            make(map[string]map[string]string),
+		PathwaysAddFlds:          make(map[string]map[string]string),
+		FareAttributesAddFlds:    make(map[string]map[string]string),
+		FareRulesAddFlds:         make(map[string]map[string]map[*gtfs.FareAttributeRule]string),
+		TransfersAddFlds:         make(map[string]map[gtfs.TransferKey]string),
+		FeedInfosAddFlds:         make(map[string]map[*gtfs.FeedInfo]string),
+		AttributionsAddFlds:      make(map[string]map[*gtfs.Attribution]string),
+		NoticesAddFlds:           make(map[string]map[string]string),
+		TripSegmentsAddFlds:      make(map[string]map[string]string),
+		NoticeAssignmentsAddFlds: make(map[string]map[*gtfs.NoticeAssignment]string),
+		ErrorStats:               ErrStats{},
+		warnCounts:               make(map[string]int),
+		NumShpPoints:             0,
+		NumStopTimes:             0,
+		fastParsePossible:        true,
+		opts:                     ParseOptions{false, false, false, false, "", false, false, false, false, false, gtfs.Date{}, gtfs.Date{}, make([]Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false, false, false, false},
 	}
 	g.lastString = &g.emptyString
 
@@ -343,6 +362,13 @@ func (feed *Feed) PrefixParse(path string, prefix string) error {
 	if e == nil {
 		e = feed.parseAttributions(path, prefix, filteredRoutes, filteredTrips)
 	}
+	if e == nil {
+		e = feed.parseNotices(path, prefix)
+	}
+	if e == nil {
+		e = feed.parseNoticeAssignments(path, prefix, filteredRoutes, filteredTrips)
+	}
+
 	// if e == nil {
 	// e = feed.parseTranslations(path, prefix)
 	// }
@@ -2044,6 +2070,237 @@ func (feed *Feed) parseAttributions(path string, prefix string, filteredRoutes m
 	return e
 }
 
+func (feed *Feed) parseNotices(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "notices.txt")
+
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"notices.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := NoticeFields{
+		noticeId:      reader.headeridx.GetFldId("notice_id", -1),
+		noticeGroupId: reader.headeridx.GetFldId("notice_group_id", -2),
+		displayText:   reader.headeridx.GetFldId("display_text", -3),
+	}
+
+	addFlds := make([]int, 0)
+
+	if feed.opts.KeepAddFlds {
+		addFlds = addiFields(reader.header, flds)
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		notice, e := createNotice(record, flds, feed, prefix)
+		if e == nil {
+			if _, ok := feed.Notices[notice.Id]; ok {
+				e = errors.New("ID collision, notice_id '" + notice.Id + "' already used.")
+			}
+		}
+
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedNotices++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+
+		feed.Notices[notice.Id] = notice
+		feed.ErrorStats.NumNotices++
+
+		if feed.opts.ShowWarnings && !isValidId(notice.Id) {
+			feed.warnLimited("non_ascii_or_non_printable_char", fmt.Errorf("non_ascii_or_non_printable_char: notice_id '%s' contains non-ASCII or non-printable characters", notice.Id))
+		}
+
+		for _, i := range addFlds {
+			if i < len(record) {
+				if _, ok := feed.NoticesAddFlds[reader.header[i]]; !ok {
+					feed.NoticesAddFlds[reader.header[i]] = make(map[string]string)
+				}
+
+				feed.NoticesAddFlds[reader.header[i]][notice.Id] = record[i]
+			}
+		}
+	}
+
+	feed.ColOrders.Notices = append([]string(nil), reader.header...)
+
+	return e
+}
+
+func (feed *Feed) parseTripSegments(path string, prefix string, filteredTrips map[string]struct{}) (err error) {
+	file, e := feed.getFile(path, "trip_segments.txt")
+
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"trip_segments.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := TripSegmentFields{
+		tripSegmentId:    reader.headeridx.GetFldId("trip_segment_id", -1),
+		tripId:           reader.headeridx.GetFldId("trip_id", -2),
+		fromStopSequence: reader.headeridx.GetFldId("from_stop_sequence", -3),
+		toStopSequence:   reader.headeridx.GetFldId("to_stop_sequence", -4),
+	}
+
+	addFlds := make([]int, 0)
+
+	if feed.opts.KeepAddFlds {
+		addFlds = addiFields(reader.header, flds)
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		ts, e := createTripSegment(record, flds, feed, prefix)
+		if e == nil {
+			if _, ok := feed.TripSegments[ts.Id]; ok {
+				e = errors.New("ID collision, trip_segment_id '" + ts.Id + "' already used.")
+			}
+		}
+
+		if e != nil {
+			tripNotFoundErr, tripNotFound := e.(*TripNotFoundErr)
+			wasFiltered := false
+			if tripNotFound {
+				_, wasFiltered = filteredTrips[tripNotFoundErr.TripId()]
+			}
+
+			if wasFiltered {
+				continue
+			} else if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedTripSegments++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+
+		feed.TripSegments[ts.Id] = ts
+		feed.ErrorStats.NumTripSegments++
+
+		if feed.opts.ShowWarnings && !isValidId(ts.Id) {
+			feed.warnLimited("non_ascii_or_non_printable_char", fmt.Errorf("non_ascii_or_non_printable_char: trip_segment_id '%s' contains non-ASCII or non-printable characters", ts.Id))
+		}
+
+		for _, i := range addFlds {
+			if i < len(record) {
+				if _, ok := feed.TripSegmentsAddFlds[reader.header[i]]; !ok {
+					feed.TripSegmentsAddFlds[reader.header[i]] = make(map[string]string)
+				}
+
+				feed.TripSegmentsAddFlds[reader.header[i]][ts.Id] = record[i]
+			}
+		}
+	}
+
+	feed.ColOrders.TripSegments = append([]string(nil), reader.header...)
+
+	return e
+}
+
+func (feed *Feed) parseNoticeAssignments(path string, prefix string, filteredRoutes map[string]struct{}, filteredTrips map[string]struct{}) (err error) {
+	file, e := feed.getFile(path, "notice_assignments.txt")
+
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"notice_assignments.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := NoticeAssignmentFields{
+		noticeId:      reader.headeridx.GetFldId("notice_id", -1),
+		noticeGroupId: reader.headeridx.GetFldId("notice_group_id", -2),
+		tableName:     reader.headeridx.GetFldId("table_name", -3),
+		recordId:      reader.headeridx.GetFldId("record_id", -4),
+	}
+
+	addFlds := make([]int, 0)
+
+	if feed.opts.KeepAddFlds {
+		addFlds = addiFields(reader.header, flds)
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		na, route, trip, stop, tripSegment, e := createNoticeAssignment(record, flds, feed, prefix)
+
+		if e != nil {
+			routeNotFoundErr, routeNotFound := e.(*RouteNotFoundErr)
+			wasFiltered := false
+			if routeNotFound {
+				_, wasFiltered = filteredRoutes[routeNotFoundErr.RouteId()]
+			}
+
+			tripNotFoundErr, tripNotFound := e.(*TripNotFoundErr)
+			if tripNotFound {
+				_, wasFiltered = filteredTrips[tripNotFoundErr.TripId()]
+			}
+
+			if wasFiltered {
+				continue
+			} else if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedNoticeAssignments++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+
+		if route != nil {
+			route.NoticeAssignments = append(route.NoticeAssignments, na)
+		} else if trip != nil {
+			if trip.NoticeAssignments == nil {
+				nas := make([]*gtfs.NoticeAssignment, 0)
+				trip.NoticeAssignments = &nas
+			}
+			*trip.NoticeAssignments = append(*trip.NoticeAssignments, na)
+		} else if stop != nil {
+			stop.NoticeAssignments = append(stop.NoticeAssignments, na)
+		} else if tripSegment != nil {
+			tripSegment.NoticeAssignments = append(tripSegment.NoticeAssignments, na)
+		}
+
+		feed.ErrorStats.NumNoticeAssignments++
+
+		for _, i := range addFlds {
+			if i < len(record) {
+				if _, ok := feed.NoticeAssignmentsAddFlds[reader.header[i]]; !ok {
+					feed.NoticeAssignmentsAddFlds[reader.header[i]] = make(map[*gtfs.NoticeAssignment]string)
+				}
+
+				feed.NoticeAssignmentsAddFlds[reader.header[i]][na] = record[i]
+			}
+		}
+	}
+
+	feed.ColOrders.NoticeAssignments = append([]string(nil), reader.header...)
+
+	return e
+}
+
 func (feed *Feed) parseLevels(path string, idprefix string) (err error) {
 	file, e := feed.getFile(path, "levels.txt")
 
@@ -2375,21 +2632,24 @@ func (feed *Feed) getGTFSDir(zip *zip.ReadCloser) string {
 
 	pathm := make(map[string]int)
 	files := map[string]bool{
-		"agency.txt":          true,
-		"stops.txt":           true,
-		"routes.txt":          true,
-		"trips.txt":           true,
-		"stop_times.txt":      true,
-		"calendar.txt":        true,
-		"calendar_dates.txt":  true,
-		"fare_attributes.txt": true,
-		"fare_rules.txt":      true,
-		"shapes.txt":          true,
-		"frequencies.txt":     true,
-		"transfers.txt":       true,
-		"pathways.txt":        true,
-		"levels.txt":          true,
-		"feed_info.txt":       true,
+		"agency.txt":             true,
+		"stops.txt":              true,
+		"routes.txt":             true,
+		"trips.txt":              true,
+		"stop_times.txt":         true,
+		"calendar.txt":           true,
+		"calendar_dates.txt":     true,
+		"fare_attributes.txt":    true,
+		"fare_rules.txt":         true,
+		"shapes.txt":             true,
+		"frequencies.txt":        true,
+		"transfers.txt":          true,
+		"pathways.txt":           true,
+		"notices.txt":            true,
+		"trip_segments.txt":      true,
+		"notice_assignments.txt": true,
+		"levels.txt":             true,
+		"feed_info.txt":          true,
 	}
 
 	for _, f := range feed.zipFileCloser.File {

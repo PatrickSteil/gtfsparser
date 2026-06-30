@@ -20,6 +20,7 @@ type Trip struct {
 	Frequencies           *[]*Frequency
 	Attributions          *[]*Attribution
 	Translations          *[]*Translation
+	NoticeAssignments     *[]*NoticeAssignment
 	Direction_id          int8
 	Wheelchair_accessible int8
 	Bikes_allowed         int8

@@ -70,6 +70,69 @@ func (flds TranslationFields) FldName(idx int) (name string) {
 	}
 }
 
+type NoticeFields struct {
+	noticeId      int
+	noticeGroupId int
+	displayText   int
+}
+
+func (flds NoticeFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.noticeId:
+		return "notice_id"
+	case flds.noticeGroupId:
+		return "notice_group_id"
+	case flds.displayText:
+		return "display_text"
+	default:
+		return ""
+	}
+}
+
+type TripSegmentFields struct {
+	tripSegmentId    int
+	tripId           int
+	fromStopSequence int
+	toStopSequence   int
+}
+
+func (flds TripSegmentFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.tripSegmentId:
+		return "trip_segment_id"
+	case flds.tripId:
+		return "trip_id"
+	case flds.fromStopSequence:
+		return "from_stop_sequence"
+	case flds.toStopSequence:
+		return "to_stop_sequence"
+	default:
+		return ""
+	}
+}
+
+type NoticeAssignmentFields struct {
+	noticeId      int
+	noticeGroupId int
+	tableName     int
+	recordId      int
+}
+
+func (flds NoticeAssignmentFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.noticeId:
+		return "notice_id"
+	case flds.noticeGroupId:
+		return "notice_group_id"
+	case flds.tableName:
+		return "table_name"
+	case flds.recordId:
+		return "record_id"
+	default:
+		return ""
+	}
+}
+
 type AttributionFields struct {
 	attributionId    int
 	organizationName int
@@ -674,6 +737,16 @@ func (e *TripNotFoundErr) TripId() string {
 	return e.prefix + e.tid
 }
 
+type NoticeTargetNotFoundErr struct {
+	prefix string
+	table  string
+	id     string
+}
+
+func (e *NoticeTargetNotFoundErr) Error() string {
+	return "No record with id " + e.id + " found in table '" + e.table + "'."
+}
+
 type ZoneNotFoundError struct {
 	zid string
 }
@@ -751,6 +824,136 @@ func createTranslation(r []string, flds TranslationFields, feed *Feed, prefix st
 	}
 
 	return tr, nil
+}
+
+func createNotice(r []string, flds NoticeFields, feed *Feed, prefix string) (n *gtfs.Notice, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	a := new(gtfs.Notice)
+
+	a.Id = prefix + getString(flds.noticeId, r, flds.FldName(flds.noticeId), true, true, "")
+	a.GroupId = getString(flds.noticeGroupId, r, flds.FldName(flds.noticeGroupId), false, false, "")
+	if len(a.GroupId) > 0 {
+		a.GroupId = prefix + a.GroupId
+	}
+	a.DisplayText = getString(flds.displayText, r, flds.FldName(flds.displayText), true, true, feed.opts.EmptyStringRepl)
+
+	return a, nil
+}
+
+func createTripSegment(r []string, flds TripSegmentFields, feed *Feed, prefix string) (t *gtfs.TripSegment, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	a := new(gtfs.TripSegment)
+
+	a.Id = prefix + getString(flds.tripSegmentId, r, flds.FldName(flds.tripSegmentId), true, true, "")
+
+	tripId := getString(flds.tripId, r, flds.FldName(flds.tripId), true, true, "")
+
+	if trip, ok := feed.Trips[prefix+tripId]; ok {
+		a.Trip = trip
+	} else {
+		panic(&TripNotFoundErr{prefix, tripId})
+	}
+
+	a.From_stop_sequence = getPositiveInt(flds.fromStopSequence, r, flds.FldName(flds.fromStopSequence), true)
+	a.To_stop_sequence = getPositiveInt(flds.toStopSequence, r, flds.FldName(flds.toStopSequence), true)
+
+	if a.To_stop_sequence < a.From_stop_sequence {
+		panic(fmt.Errorf("to_stop_sequence (%d) must be greater than or equal to from_stop_sequence (%d)", a.To_stop_sequence, a.From_stop_sequence))
+	}
+
+	foundFrom := false
+	foundTo := false
+
+	for i := range a.Trip.StopTimes {
+		seq := a.Trip.StopTimes[i].Sequence()
+		if seq == a.From_stop_sequence {
+			foundFrom = true
+		}
+		if seq == a.To_stop_sequence {
+			foundTo = true
+		}
+	}
+
+	if !foundFrom {
+		panic(fmt.Errorf("from_stop_sequence %d does not refer to a stop_sequence of trip '%s' in stop_times.txt", a.From_stop_sequence, tripId))
+	}
+
+	if !foundTo {
+		panic(fmt.Errorf("to_stop_sequence %d does not refer to a stop_sequence of trip '%s' in stop_times.txt", a.To_stop_sequence, tripId))
+	}
+
+	return a, nil
+}
+
+func createNoticeAssignment(r []string, flds NoticeAssignmentFields, feed *Feed, prefix string) (na *gtfs.NoticeAssignment, route *gtfs.Route, trip *gtfs.Trip, stop *gtfs.Stop, tripSegment *gtfs.TripSegment, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	a := new(gtfs.NoticeAssignment)
+
+	noticeId := getString(flds.noticeId, r, flds.FldName(flds.noticeId), false, false, "")
+	noticeGroupId := getString(flds.noticeGroupId, r, flds.FldName(flds.noticeGroupId), false, false, "")
+
+	if (len(noticeId) == 0) == (len(noticeGroupId) == 0) {
+		return nil, nil, nil, nil, nil, errors.New("Exactly one of notice_id or notice_group_id must be set!")
+	}
+
+	if len(noticeId) > 0 {
+		if n, ok := feed.Notices[prefix+noticeId]; ok {
+			a.Notice = n
+		} else {
+			panic(fmt.Errorf("No notice with id %s found", noticeId))
+		}
+	} else {
+		a.GroupId = prefix + noticeGroupId
+	}
+
+	tableName := getString(flds.tableName, r, flds.FldName(flds.tableName), true, true, "")
+	recordId := getString(flds.recordId, r, flds.FldName(flds.recordId), true, true, "")
+
+	switch tableName {
+	case "routes":
+		if val, ok := feed.Routes[prefix+recordId]; ok {
+			route = val
+		} else {
+			panic(&RouteNotFoundErr{prefix, recordId, ""})
+		}
+	case "trips":
+		if val, ok := feed.Trips[prefix+recordId]; ok {
+			trip = val
+		} else {
+			panic(&TripNotFoundErr{prefix, recordId})
+		}
+	case "stops":
+		if val, ok := feed.Stops[prefix+recordId]; ok {
+			stop = val
+		} else {
+			panic(&StopNotFoundErr{prefix, recordId})
+		}
+	case "trip_segments":
+		if val, ok := feed.TripSegments[prefix+recordId]; ok {
+			tripSegment = val
+		} else {
+			panic(&NoticeTargetNotFoundErr{prefix, tableName, recordId})
+		}
+	default:
+		panic(fmt.Errorf("table_name must be one of: 'routes', 'trips', 'stops', 'trip_segments' (found '%s')", tableName))
+	}
+
+	return a, route, trip, stop, tripSegment, nil
 }
 
 func createAttribution(r []string, flds AttributionFields, feed *Feed, prefix string) (attr *gtfs.Attribution, ag *gtfs.Agency, route *gtfs.Route, trip *gtfs.Trip, err error) {
