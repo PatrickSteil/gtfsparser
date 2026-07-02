@@ -40,6 +40,15 @@ type ColOrders struct {
 	Transfers          []string
 	FeedInfos          []string
 	Attributions       []string
+	Areas              []string
+	StopAreas          []string
+	Networks           []string
+	RouteNetworks      []string
+	Timeframes         []string
+	FareMedia          []string
+	FareProducts       []string
+	FareLegRules       []string
+	FareTransferRules  []string
 }
 
 type Polygon struct {
@@ -130,6 +139,15 @@ type ErrStats struct {
 	DroppedFeedInfos          int
 	DroppedTranslations       int
 	NumTranslations           int
+	DroppedAreas              int
+	DroppedStopAreas          int
+	DroppedNetworks           int
+	DroppedRouteNetworks      int
+	DroppedTimeframes         int
+	DroppedFareMedia          int
+	DroppedFareProducts       int
+	DroppedFareLegRules       int
+	DroppedFareTransferRules  int
 }
 
 // Feed represents a single GTFS feed
@@ -146,6 +164,14 @@ type Feed struct {
 	Transfers      map[gtfs.TransferKey]gtfs.TransferVal
 	FeedInfos      []*gtfs.FeedInfo
 	ZoneIds        map[string]bool
+
+	Areas             map[string]*gtfs.Area
+	Networks          map[string]*gtfs.Network
+	Timeframes        []*gtfs.Timeframe
+	FareMedia         map[string]*gtfs.FareMedium
+	FareProducts      map[string][]*gtfs.FareProduct
+	FareLegRules      []*gtfs.FareLegRule
+	FareTransferRules []*gtfs.FareTransferRule
 
 	StopsAddFlds          map[string]map[string]string
 	AgenciesAddFlds       map[string]map[string]string
@@ -216,7 +242,7 @@ func NewFeed() *Feed {
 		TransfersAddFlds:      make(map[string]map[gtfs.TransferKey]string),
 		FeedInfosAddFlds:      make(map[string]map[*gtfs.FeedInfo]string),
 		AttributionsAddFlds:   make(map[string]map[*gtfs.Attribution]string),
-		ErrorStats:            ErrStats{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		ErrorStats:            ErrStats{},
 		warnCounts:            make(map[string]int),
 		NumShpPoints:          0,
 		NumStopTimes:          0,
@@ -323,6 +349,34 @@ func (feed *Feed) PrefixParse(path string, prefix string) error {
 	if e == nil {
 		e = feed.parseFareAttributeRules(path, prefix, filteredRoutes, geofilteredZones)
 	}
+	if e == nil {
+		e = feed.parseAreas(path, prefix)
+	}
+	if e == nil {
+		e = feed.parseStopAreas(path, prefix, geofilteredStops)
+	}
+	if e == nil {
+		e = feed.parseNetworks(path, prefix)
+	}
+	if e == nil {
+		e = feed.parseRouteNetworks(path, prefix, filteredRoutes)
+	}
+	if e == nil {
+		e = feed.parseTimeframes(path, prefix)
+	}
+	if e == nil {
+		e = feed.parseFareMedia(path, prefix)
+	}
+	if e == nil {
+		e = feed.parseFareProducts(path, prefix)
+	}
+	if e == nil {
+		e = feed.parseFareLegRules(path, prefix)
+	}
+	if e == nil {
+		e = feed.parseFareTransferRules(path, prefix)
+	}
+
 	if e == nil {
 		e = feed.parseFrequencies(path, prefix, filteredTrips)
 	}
@@ -1392,6 +1446,388 @@ func (feed *Feed) parseStopTimes(path string, prefix string, geofiltered map[str
 		}
 	}
 
+	return e
+}
+
+func (feed *Feed) parseAreas(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "areas.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"areas.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := AreaFields{
+		areaId:   reader.headeridx.GetFldId("area_id", -1),
+		areaName: reader.headeridx.GetFldId("area_name", -2),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		a, e := createArea(record, flds, feed, prefix)
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedAreas++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		if _, ok := feed.Areas[a.Id]; ok {
+			e = errors.New("ID collision, area_id '" + a.Id + "' already used.")
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedAreas++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		feed.Areas[a.Id] = a
+	}
+
+	feed.ColOrders.Areas = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseStopAreas(path string, prefix string, geofilteredStops map[string]struct{}) (err error) {
+	file, e := feed.getFile(path, "stop_areas.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"stop_areas.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := StopAreaFields{
+		areaId: reader.headeridx.GetFldId("area_id", -1),
+		stopId: reader.headeridx.GetFldId("stop_id", -2),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		area, stop, e := createStopArea(record, flds, feed, prefix)
+		if e != nil {
+			stopNotFoundErr, stopNotFound := e.(*StopNotFoundErr)
+			wasFiltered := false
+			if stopNotFound {
+				_, wasFiltered = geofilteredStops[stopNotFoundErr.StopId()]
+			}
+			if wasFiltered {
+				continue
+			} else if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedStopAreas++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		stop.Areas = append(stop.Areas, area)
+	}
+
+	feed.ColOrders.StopAreas = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseNetworks(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "networks.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"networks.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := NetworkFields{
+		networkId:   reader.headeridx.GetFldId("network_id", -1),
+		networkName: reader.headeridx.GetFldId("network_name", -2),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		n, e := createNetwork(record, flds, feed, prefix)
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedNetworks++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		if existing, ok := feed.Networks[n.Id]; ok {
+			// A network implicitly created from routes.txt#network_id has an empty
+			// name; fill it in now that we have the real networks.txt entry.
+			if existing.Name == "" {
+				existing.Name = n.Name
+			}
+		} else {
+			feed.Networks[n.Id] = n
+		}
+	}
+
+	feed.ColOrders.Networks = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseRouteNetworks(path string, prefix string, filteredRoutes map[string]struct{}) (err error) {
+	file, e := feed.getFile(path, "route_networks.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"route_networks.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := RouteNetworkFields{
+		networkId: reader.headeridx.GetFldId("network_id", -1),
+		routeId:   reader.headeridx.GetFldId("route_id", -2),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		_, _, e := createRouteNetwork(record, flds, feed, prefix)
+		if e != nil {
+			routeNotFoundErr, routeNotFound := e.(*RouteNotFoundErr)
+			wasFiltered := false
+			if routeNotFound {
+				_, wasFiltered = filteredRoutes[routeNotFoundErr.RouteId()]
+			}
+			if wasFiltered {
+				continue
+			} else if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedRouteNetworks++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+	}
+
+	feed.ColOrders.RouteNetworks = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseTimeframes(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "timeframes.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"timeframes.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := TimeframeFields{
+		timeframeGroupId: reader.headeridx.GetFldId("timeframe_group_id", -1),
+		startTime:        reader.headeridx.GetFldId("start_time", -2),
+		endTime:          reader.headeridx.GetFldId("end_time", -3),
+		serviceId:        reader.headeridx.GetFldId("service_id", -4),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		tf, e := createTimeframe(record, flds, feed, prefix)
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedTimeframes++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		feed.Timeframes = append(feed.Timeframes, tf)
+	}
+
+	feed.ColOrders.Timeframes = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseFareMedia(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "fare_media.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"fare_media.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := FareMediumFields{
+		fareMediaId:   reader.headeridx.GetFldId("fare_media_id", -1),
+		fareMediaName: reader.headeridx.GetFldId("fare_media_name", -2),
+		fareMediaType: reader.headeridx.GetFldId("fare_media_type", -3),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		fm, e := createFareMedium(record, flds, feed, prefix)
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedFareMedia++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		if _, ok := feed.FareMedia[fm.Id]; ok {
+			e = errors.New("ID collision, fare_media_id '" + fm.Id + "' already used.")
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedFareMedia++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		feed.FareMedia[fm.Id] = fm
+	}
+
+	feed.ColOrders.FareMedia = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseFareProducts(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "fare_products.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"fare_products.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := FareProductFields{
+		fareProductId:   reader.headeridx.GetFldId("fare_product_id", -1),
+		fareProductName: reader.headeridx.GetFldId("fare_product_name", -2),
+		fareMediaId:     reader.headeridx.GetFldId("fare_media_id", -3),
+		amount:          reader.headeridx.GetFldId("amount", -4),
+		currency:        reader.headeridx.GetFldId("currency", -5),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		fp, e := createFareProduct(record, flds, feed, prefix)
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedFareProducts++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		feed.FareProducts[fp.Id] = append(feed.FareProducts[fp.Id], fp)
+	}
+
+	feed.ColOrders.FareProducts = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseFareLegRules(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "fare_leg_rules.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"fare_leg_rules.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := FareLegRuleFields{
+		legGroupId:           reader.headeridx.GetFldId("leg_group_id", -1),
+		networkId:            reader.headeridx.GetFldId("network_id", -2),
+		fromAreaId:           reader.headeridx.GetFldId("from_area_id", -3),
+		toAreaId:             reader.headeridx.GetFldId("to_area_id", -4),
+		fromTimeframeGroupId: reader.headeridx.GetFldId("from_timeframe_group_id", -5),
+		toTimeframeGroupId:   reader.headeridx.GetFldId("to_timeframe_group_id", -6),
+		fareProductId:        reader.headeridx.GetFldId("fare_product_id", -7),
+		rulePriority:         reader.headeridx.GetFldId("rule_priority", -8),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		fl, e := createFareLegRule(record, flds, feed, prefix)
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedFareLegRules++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		feed.FareLegRules = append(feed.FareLegRules, fl)
+	}
+
+	feed.ColOrders.FareLegRules = append([]string(nil), reader.header...)
+	return e
+}
+
+func (feed *Feed) parseFareTransferRules(path string, prefix string) (err error) {
+	file, e := feed.getFile(path, "fare_transfer_rules.txt")
+	if e != nil {
+		return nil
+	}
+	reader := NewCsvParser(file, feed.opts.DropErroneous, false)
+	defer func() {
+		if r := recover(); r != nil {
+			err = ParseError{"fare_transfer_rules.txt", reader.Curline, r.(error).Error()}
+		}
+	}()
+
+	var record []string
+	flds := FareTransferRuleFields{
+		fromLegGroupId:    reader.headeridx.GetFldId("from_leg_group_id", -1),
+		toLegGroupId:      reader.headeridx.GetFldId("to_leg_group_id", -2),
+		transferCount:     reader.headeridx.GetFldId("transfer_count", -3),
+		durationLimit:     reader.headeridx.GetFldId("duration_limit", -4),
+		durationLimitType: reader.headeridx.GetFldId("duration_limit_type", -5),
+		fareTransferType:  reader.headeridx.GetFldId("fare_transfer_type", -6),
+		fareProductId:     reader.headeridx.GetFldId("fare_product_id", -7),
+	}
+
+	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
+		ft, e := createFareTransferRule(record, flds, feed, prefix)
+		if e != nil {
+			if feed.opts.DropErroneous {
+				feed.ErrorStats.DroppedFareTransferRules++
+				feed.warn(e)
+				continue
+			} else {
+				panic(e)
+			}
+		}
+		feed.FareTransferRules = append(feed.FareTransferRules, ft)
+	}
+
+	feed.ColOrders.FareTransferRules = append([]string(nil), reader.header...)
 	return e
 }
 

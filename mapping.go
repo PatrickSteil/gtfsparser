@@ -629,6 +629,201 @@ func (flds PathwayFields) FldName(idx int) (name string) {
 	}
 }
 
+type AreaFields struct {
+	areaId   int
+	areaName int
+}
+
+func (flds AreaFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.areaId:
+		return "area_id"
+	case flds.areaName:
+		return "area_name"
+	default:
+		return ""
+	}
+}
+
+type StopAreaFields struct {
+	areaId int
+	stopId int
+}
+
+func (flds StopAreaFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.areaId:
+		return "area_id"
+	case flds.stopId:
+		return "stop_id"
+	default:
+		return ""
+	}
+}
+
+type NetworkFields struct {
+	networkId   int
+	networkName int
+}
+
+func (flds NetworkFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.networkId:
+		return "network_id"
+	case flds.networkName:
+		return "network_name"
+	default:
+		return ""
+	}
+}
+
+type RouteNetworkFields struct {
+	networkId int
+	routeId   int
+}
+
+func (flds RouteNetworkFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.networkId:
+		return "network_id"
+	case flds.routeId:
+		return "route_id"
+	default:
+		return ""
+	}
+}
+
+type TimeframeFields struct {
+	timeframeGroupId int
+	startTime        int
+	endTime          int
+	serviceId        int
+}
+
+func (flds TimeframeFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.timeframeGroupId:
+		return "timeframe_group_id"
+	case flds.startTime:
+		return "start_time"
+	case flds.endTime:
+		return "end_time"
+	case flds.serviceId:
+		return "service_id"
+	default:
+		return ""
+	}
+}
+
+type FareMediumFields struct {
+	fareMediaId   int
+	fareMediaName int
+	fareMediaType int
+}
+
+func (flds FareMediumFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.fareMediaId:
+		return "fare_media_id"
+	case flds.fareMediaName:
+		return "fare_media_name"
+	case flds.fareMediaType:
+		return "fare_media_type"
+	default:
+		return ""
+	}
+}
+
+type FareProductFields struct {
+	fareProductId   int
+	fareProductName int
+	fareMediaId     int
+	amount          int
+	currency        int
+}
+
+func (flds FareProductFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.fareProductId:
+		return "fare_product_id"
+	case flds.fareProductName:
+		return "fare_product_name"
+	case flds.fareMediaId:
+		return "fare_media_id"
+	case flds.amount:
+		return "amount"
+	case flds.currency:
+		return "currency"
+	default:
+		return ""
+	}
+}
+
+type FareLegRuleFields struct {
+	legGroupId           int
+	networkId            int
+	fromAreaId           int
+	toAreaId             int
+	fromTimeframeGroupId int
+	toTimeframeGroupId   int
+	fareProductId        int
+	rulePriority         int
+}
+
+func (flds FareLegRuleFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.legGroupId:
+		return "leg_group_id"
+	case flds.networkId:
+		return "network_id"
+	case flds.fromAreaId:
+		return "from_area_id"
+	case flds.toAreaId:
+		return "to_area_id"
+	case flds.fromTimeframeGroupId:
+		return "from_timeframe_group_id"
+	case flds.toTimeframeGroupId:
+		return "to_timeframe_group_id"
+	case flds.fareProductId:
+		return "fare_product_id"
+	case flds.rulePriority:
+		return "rule_priority"
+	default:
+		return ""
+	}
+}
+
+type FareTransferRuleFields struct {
+	fromLegGroupId    int
+	toLegGroupId      int
+	transferCount     int
+	durationLimit     int
+	durationLimitType int
+	fareTransferType  int
+	fareProductId     int
+}
+
+func (flds FareTransferRuleFields) FldName(idx int) (name string) {
+	switch idx {
+	case flds.fromLegGroupId:
+		return "from_leg_group_id"
+	case flds.toLegGroupId:
+		return "to_leg_group_id"
+	case flds.transferCount:
+		return "transfer_count"
+	case flds.durationLimit:
+		return "duration_limit"
+	case flds.durationLimitType:
+		return "duration_limit_type"
+	case flds.fareTransferType:
+		return "fare_transfer_type"
+	case flds.fareProductId:
+		return "fare_product_id"
+	default:
+		return ""
+	}
+}
+
 // custom error types for later checking
 type StopNotFoundErr struct {
 	prefix string
@@ -684,6 +879,58 @@ func (z *ZoneNotFoundError) Error() string {
 
 func (z *ZoneNotFoundError) ZoneId() string {
 	return z.zid
+}
+
+type AreaNotFoundErr struct {
+	prefix string
+	aid    string
+}
+
+func (e *AreaNotFoundErr) Error() string {
+	return "No area with id " + e.aid + " found."
+}
+
+func (e *AreaNotFoundErr) AreaId() string {
+	return e.prefix + e.aid
+}
+
+type NetworkNotFoundErr struct {
+	prefix string
+	nid    string
+}
+
+func (e *NetworkNotFoundErr) Error() string {
+	return "No network with id " + e.nid + " found."
+}
+
+func (e *NetworkNotFoundErr) NetworkId() string {
+	return e.prefix + e.nid
+}
+
+type FareProductNotFoundErr struct {
+	prefix string
+	fpid   string
+}
+
+func (e *FareProductNotFoundErr) Error() string {
+	return "No fare product with id " + e.fpid + " found."
+}
+
+func (e *FareProductNotFoundErr) FareProductId() string {
+	return e.prefix + e.fpid
+}
+
+type FareMediumNotFoundErr struct {
+	prefix string
+	fmid   string
+}
+
+func (e *FareMediumNotFoundErr) Error() string {
+	return "No fare medium with id " + e.fmid + " found."
+}
+
+func (e *FareMediumNotFoundErr) FareMediumId() string {
+	return e.prefix + e.fmid
 }
 
 func createTranslation(r []string, flds TranslationFields, feed *Feed, prefix string) (attr *gtfs.Translation, err error) {
@@ -1585,6 +1832,16 @@ func createFareRule(r []string, flds FareRuleFields, feed *Feed, prefix string, 
 	return fareattr, rule, nil
 }
 
+// getOptionalTime is like getTime, but treats a missing column (id < 0) as
+// "not set" instead of panicking, returning the same -1/-1/-1 sentinel value
+// getTime uses for an empty cell.
+func getOptionalTime(id int, r []string, fldName string) gtfs.Time {
+	if id < 0 {
+		return gtfs.Time{Second: int8(-1), Minute: int8(-1), Hour: int16(-1)}
+	}
+	return getTime(id, r, fldName)
+}
+
 // checkZoneID only validates existence; filtering and policy decisions
 // are handled by the caller.
 func (feed *Feed) checkZoneID(
@@ -1756,6 +2013,227 @@ func createLevel(r []string, flds LevelFields, feed *Feed, idprefix string) (t *
 	a.Name = getString(flds.levelName, r, flds.FldName(flds.levelName), false, false, "")
 
 	return a, nil
+}
+
+func createArea(r []string, flds AreaFields, feed *Feed, prefix string) (a *gtfs.Area, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	area := new(gtfs.Area)
+	area.Id = prefix + getString(flds.areaId, r, flds.FldName(flds.areaId), true, true, "")
+	area.Name = getString(flds.areaName, r, flds.FldName(flds.areaName), false, false, "")
+
+	return area, nil
+}
+
+func createStopArea(r []string, flds StopAreaFields, feed *Feed, prefix string) (area *gtfs.Area, stop *gtfs.Stop, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	areaId := prefix + getString(flds.areaId, r, flds.FldName(flds.areaId), true, true, "")
+	stopId := prefix + getString(flds.stopId, r, flds.FldName(flds.stopId), true, true, "")
+
+	a, ok := feed.Areas[areaId]
+	if !ok {
+		panic(&AreaNotFoundErr{prefix, areaId[len(prefix):]})
+	}
+
+	s, ok := feed.Stops[stopId]
+	if !ok {
+		panic(&StopNotFoundErr{prefix, stopId[len(prefix):]})
+	}
+
+	return a, s, nil
+}
+
+func createNetwork(r []string, flds NetworkFields, feed *Feed, prefix string) (n *gtfs.Network, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	net := new(gtfs.Network)
+	net.Id = prefix + getString(flds.networkId, r, flds.FldName(flds.networkId), true, true, "")
+	net.Name = getString(flds.networkName, r, flds.FldName(flds.networkName), false, false, "")
+
+	return net, nil
+}
+
+func createRouteNetwork(r []string, flds RouteNetworkFields, feed *Feed, prefix string) (network *gtfs.Network, route *gtfs.Route, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	netId := prefix + getString(flds.networkId, r, flds.FldName(flds.networkId), true, true, "")
+	routeId := prefix + getString(flds.routeId, r, flds.FldName(flds.routeId), true, true, "")
+
+	n, ok := feed.Networks[netId]
+	if !ok {
+		panic(&NetworkNotFoundErr{prefix, netId[len(prefix):]})
+	}
+
+	rt, ok := feed.Routes[routeId]
+	if !ok {
+		panic(&RouteNotFoundErr{prefix, routeId[len(prefix):], ""})
+	}
+
+	if rt.Network != nil && rt.Network != n {
+		panic(errors.New("route " + rt.Id + " already has a network assigned (either via routes.txt#network_id or another route_networks.txt entry)"))
+	}
+
+	rt.Network = n
+
+	return n, rt, nil
+}
+
+func createTimeframe(r []string, flds TimeframeFields, feed *Feed, prefix string) (t *gtfs.Timeframe, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	tf := new(gtfs.Timeframe)
+	tf.Group_id = prefix + getString(flds.timeframeGroupId, r, flds.FldName(flds.timeframeGroupId), true, true, "")
+	tf.Start_time = getOptionalTime(flds.startTime, r, flds.FldName(flds.startTime))
+	tf.End_time = getOptionalTime(flds.endTime, r, flds.FldName(flds.endTime))
+
+	sId := prefix + getString(flds.serviceId, r, flds.FldName(flds.serviceId), true, true, "")
+	s, ok := feed.Services[sId]
+	if !ok {
+		panic(&TripNotFoundErr{prefix, sId[len(prefix):]})
+	}
+	tf.Service = s
+
+	return tf, nil
+}
+
+func createFareMedium(r []string, flds FareMediumFields, feed *Feed, prefix string) (fm *gtfs.FareMedium, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	m := new(gtfs.FareMedium)
+	m.Id = prefix + getString(flds.fareMediaId, r, flds.FldName(flds.fareMediaId), true, true, "")
+	m.Name = getString(flds.fareMediaName, r, flds.FldName(flds.fareMediaName), false, false, "")
+	m.Type = int8(getRangeInt(flds.fareMediaType, r, flds.FldName(flds.fareMediaType), true, 0, 4))
+
+	return m, nil
+}
+
+func createFareProduct(r []string, flds FareProductFields, feed *Feed, prefix string) (fp *gtfs.FareProduct, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	p := new(gtfs.FareProduct)
+	p.Id = prefix + getString(flds.fareProductId, r, flds.FldName(flds.fareProductId), true, true, "")
+	p.Name = getString(flds.fareProductName, r, flds.FldName(flds.fareProductName), false, false, "")
+	p.Amount = getString(flds.amount, r, flds.FldName(flds.amount), true, false, "")
+	if feed.opts.UseDefValueOnError {
+		p.Currency = getString(flds.currency, r, flds.FldName(flds.currency), true, true, "XXX")
+	} else {
+		p.Currency = getString(flds.currency, r, flds.FldName(flds.currency), true, true, "")
+	}
+
+	mId := prefix + getString(flds.fareMediaId, r, flds.FldName(flds.fareMediaId), false, false, "")
+	if len(mId) > len(prefix) {
+		if val, ok := feed.FareMedia[mId]; ok {
+			p.Media = val
+		} else {
+			panic(&FareMediumNotFoundErr{prefix, mId[len(prefix):]})
+		}
+	}
+
+	return p, nil
+}
+
+func createFareLegRule(r []string, flds FareLegRuleFields, feed *Feed, prefix string) (fl *gtfs.FareLegRule, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	rule := new(gtfs.FareLegRule)
+	rule.Leg_group_id = getString(flds.legGroupId, r, flds.FldName(flds.legGroupId), false, false, "")
+	rule.From_timeframe_group_id = getString(flds.fromTimeframeGroupId, r, flds.FldName(flds.fromTimeframeGroupId), false, false, "")
+	rule.To_timeframe_group_id = getString(flds.toTimeframeGroupId, r, flds.FldName(flds.toTimeframeGroupId), false, false, "")
+	rule.Rule_priority = getPositiveIntWithDefault(flds.rulePriority, r, flds.FldName(flds.rulePriority), 0, feed.opts.UseDefValueOnError, feed)
+
+	netId := prefix + getString(flds.networkId, r, flds.FldName(flds.networkId), false, false, "")
+	if len(netId) > len(prefix) {
+		if val, ok := feed.Networks[netId]; ok {
+			rule.Network = val
+		} else {
+			panic(&NetworkNotFoundErr{prefix, netId[len(prefix):]})
+		}
+	}
+
+	fromAreaId := prefix + getString(flds.fromAreaId, r, flds.FldName(flds.fromAreaId), false, false, "")
+	if len(fromAreaId) > len(prefix) {
+		if val, ok := feed.Areas[fromAreaId]; ok {
+			rule.From_area = val
+		} else {
+			panic(&AreaNotFoundErr{prefix, fromAreaId[len(prefix):]})
+		}
+	}
+
+	toAreaId := prefix + getString(flds.toAreaId, r, flds.FldName(flds.toAreaId), false, false, "")
+	if len(toAreaId) > len(prefix) {
+		if val, ok := feed.Areas[toAreaId]; ok {
+			rule.To_area = val
+		} else {
+			panic(&AreaNotFoundErr{prefix, toAreaId[len(prefix):]})
+		}
+	}
+
+	fpId := prefix + getString(flds.fareProductId, r, flds.FldName(flds.fareProductId), true, true, "")
+	if _, ok := feed.FareProducts[fpId]; !ok {
+		panic(&FareProductNotFoundErr{prefix, fpId[len(prefix):]})
+	}
+	rule.Fare_product_id = fpId
+
+	return rule, nil
+}
+
+func createFareTransferRule(r []string, flds FareTransferRuleFields, feed *Feed, prefix string) (ft *gtfs.FareTransferRule, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	rule := new(gtfs.FareTransferRule)
+	rule.From_leg_group_id = getString(flds.fromLegGroupId, r, flds.FldName(flds.fromLegGroupId), false, false, "")
+	rule.To_leg_group_id = getString(flds.toLegGroupId, r, flds.FldName(flds.toLegGroupId), false, false, "")
+	rule.Transfer_count = getIntWithDefault(flds.transferCount, r, flds.FldName(flds.transferCount), 0, feed.opts.UseDefValueOnError, feed)
+	rule.Duration_limit = getPositiveIntWithDefault(flds.durationLimit, r, flds.FldName(flds.durationLimit), -1, feed.opts.UseDefValueOnError, feed)
+	rule.Duration_limit_type = int8(getRangeIntWithDefault(flds.durationLimitType, r, flds.FldName(flds.durationLimitType), 0, 3, -1, feed.opts.UseDefValueOnError, feed))
+	rule.Fare_transfer_type = int8(getRangeInt(flds.fareTransferType, r, flds.FldName(flds.fareTransferType), true, 0, 2))
+
+	fpId := prefix + getString(flds.fareProductId, r, flds.FldName(flds.fareProductId), false, false, "")
+	if len(fpId) > len(prefix) {
+		if _, ok := feed.FareProducts[fpId]; !ok {
+			panic(&FareProductNotFoundErr{prefix, fpId[len(prefix):]})
+		}
+		rule.Fare_product_id = fpId
+	}
+
+	return rule, nil
 }
 
 func getString(id int, r []string, fldName string, req bool, nonempty bool, emptyrepl string) string {

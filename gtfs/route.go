@@ -26,6 +26,7 @@ type Route struct {
 	Continuous_pickup   int8
 	Continuous_drop_off int8
 	Attributions        []*Attribution
+	Network             *Network
 }
 
 func GetTypeFromExtended(t int16) int16 {
