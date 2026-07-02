@@ -2107,6 +2107,31 @@ func createTimeframe(r []string, flds TimeframeFields, feed *Feed, prefix string
 	tf.Start_time = getOptionalTime(flds.startTime, r, flds.FldName(flds.startTime))
 	tf.End_time = getOptionalTime(flds.endTime, r, flds.FldName(flds.endTime))
 
+	startDefined := tf.Start_time.SecondsSinceMidnight() >= 0
+	endDefined := tf.End_time.SecondsSinceMidnight() >= 0
+
+	// either both must be set or neither
+	if startDefined != endDefined {
+		panic(errors.New(
+			"either both start_time and end_time must be defined, or neither",
+		))
+	}
+
+	if startDefined {
+		// GTFS timeframes must be within a single service day
+		if tf.Start_time.SecondsSinceMidnight() >= 24*60*60 {
+			panic(errors.New(
+				"start_time must be smaller than 24:00:00",
+			))
+		}
+
+		if tf.End_time.SecondsSinceMidnight() >= 24*60*60 {
+			panic(errors.New(
+				"end_time must be smaller than 24:00:00",
+			))
+		}
+	}
+
 	sId := prefix + getString(flds.serviceId, r, flds.FldName(flds.serviceId), true, true, "")
 	s, ok := feed.Services[sId]
 	if !ok {

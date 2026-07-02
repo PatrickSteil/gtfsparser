@@ -8,6 +8,8 @@ package gtfsparser
 
 import (
 	"testing"
+
+	"github.com/patrickbr/gtfsparser/gtfs"
 )
 
 func TestFeedParsing(t *testing.T) {
@@ -220,6 +222,122 @@ func TestBfsReach(t *testing.T) {
 					t.Errorf("bfsReach() missing expected node %q\n  got:  %v\n  want: %v",
 						k, keys(got), keys(tt.want))
 				}
+			}
+		})
+	}
+}
+
+func TestCreateTimeframe(t *testing.T) {
+	tests := []struct {
+		name    string
+		row     []string
+		wantErr bool
+	}{
+		{
+			name: "both times omitted",
+			row: []string{
+				"weekend",
+				"",
+				"",
+				"weekend_service",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid timeframe",
+			row: []string{
+				"peak",
+				"05:00:00",
+				"09:30:00",
+				"weekday_service",
+			},
+			wantErr: false,
+		},
+		{
+			name: "midnight split timeframe",
+			row: []string{
+				"late",
+				"00:00:00",
+				"05:00:00",
+				"weekday_service",
+			},
+			wantErr: false,
+		},
+		{
+			name: "only start_time defined",
+			row: []string{
+				"broken",
+				"05:00:00",
+				"",
+				"weekday_service",
+			},
+			wantErr: true,
+		},
+		{
+			name: "only end_time defined",
+			row: []string{
+				"broken",
+				"",
+				"05:00:00",
+				"weekday_service",
+			},
+			wantErr: true,
+		},
+		{
+			name: "start_time >= 24h",
+			row: []string{
+				"broken",
+				"24:00:00",
+				"24:00:01",
+				"weekday_service",
+			},
+			wantErr: true,
+		},
+		{
+			name: "end_time >= 24h",
+			row: []string{
+				"broken",
+				"23:59:59",
+				"24:00:00",
+				"weekday_service",
+			},
+			wantErr: true,
+		},
+		{
+			name: "max valid value",
+			row: []string{
+				"late",
+				"23:59:58",
+				"23:59:59",
+				"weekday_service",
+			},
+			wantErr: false,
+		},
+	}
+
+	flds := TimeframeFields{
+		timeframeGroupId: 0,
+		startTime:        1,
+		endTime:          2,
+		serviceId:        3,
+	}
+
+	feed := NewFeed()
+	feed.SetParseOpts(ParseOptions{
+		UseDefValueOnError: false,
+		DropErroneous:      false,
+		DryRun:             false,
+	})
+
+	feed.Services["weekday_service"] = gtfs.EmptyService()
+	feed.Services["weekend_service"] = gtfs.EmptyService()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := createTimeframe(tt.row, flds, feed, "")
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("got err=%v, wantErr=%v", err, tt.wantErr)
 			}
 		})
 	}
