@@ -179,7 +179,7 @@ type Feed struct {
 	zipFileCloser *zip.ReadCloser
 	curFileHandle *os.File
 
-	lastString  *string
+	lastStrings [numInternSlots]*string
 	emptyString string
 
 	fastParsePossible bool
@@ -223,7 +223,9 @@ func NewFeed() *Feed {
 		fastParsePossible:     true,
 		opts:                  ParseOptions{false, false, false, false, "", false, false, false, false, false, gtfs.Date{}, gtfs.Date{}, make([]Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false, false, false, false},
 	}
-	g.lastString = &g.emptyString
+	for i := range g.lastStrings {
+		g.lastStrings[i] = &g.emptyString
+	}
 
 	return &g
 }
@@ -384,6 +386,29 @@ func (feed *Feed) PrefixParse(path string, prefix string) error {
 	}
 
 	return e
+}
+
+const (
+	internTripHeadsign = iota
+	internStopHeadsign
+	internTripShortName
+	internTripBlockId
+	numInternSlots
+)
+
+func (feed *Feed) internString(slot int, s string) *string {
+	if len(s) == 0 {
+		return &feed.emptyString
+	}
+
+	if *feed.lastStrings[slot] != s {
+		// s may point into the CSV parser's line buffer, clone it to
+		// avoid keeping the entire line alive
+		c := strings.Clone(s)
+		feed.lastStrings[slot] = &c
+	}
+
+	return feed.lastStrings[slot]
 }
 
 func (feed *Feed) filterServices(prefix string) {
@@ -1153,8 +1178,8 @@ func (feed *Feed) parseShapes(path string, prefix string) (err error) {
 	for record = reader.ParseCsvLine(); record != nil; record = reader.ParseCsvLine() {
 		i += 1
 
-		shape, sp, e := createShapePoint(record, flds, feed, prefix)
-		if e == nil && sp != nil &&
+		shape, sp, added, e := createShapePoint(record, flds, feed, prefix)
+		if e == nil && added &&
 			(feed.opts.CheckNullCoordinates || feed.opts.ShowWarningsExtensive) {
 			if coordErr := checkNearOriginOrPole(float64(sp.Lat), float64(sp.Lon), "Shape '"+shape.Id+"'"); coordErr != nil {
 				if feed.opts.CheckNullCoordinates {
@@ -1172,7 +1197,7 @@ func (feed *Feed) parseShapes(path string, prefix string) (err error) {
 			} else {
 				panic(e)
 			}
-		} else if sp != nil {
+		} else if added {
 			if feed.opts.ShowWarnings {
 				if !isValidId(shape.Id) {
 					feed.warnLimited("non_ascii_or_non_printable_char", fmt.Errorf("non_ascii_or_non_printable_char: shape_id '%s' contains non-ASCII or non-printable characters", shape.Id))
